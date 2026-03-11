@@ -4,6 +4,8 @@ title: "logoSTS"
 
 ```{r}
 library(tidyverse)
+library(grid)
+library(gridSVG)
 theme_set(theme_void())
 ```
 
@@ -13,7 +15,8 @@ col2 = "#00A2E8"
 ```
 
 ```{r}
-nx = 1e6
+# nx = 1e6  # old: dense polylines (59 MB SVG!)
+nx = 500    # enough for accurate crossing detection; gridSVG will thin further
 ```
 
 ```{r}
@@ -38,56 +41,92 @@ dat_poly = rbind(
 dat_poly2 = rbind(
   dat |> filter(row_number() >= last(which(y3 > y2))) |> transmute(x, y = y3),
   dat |> filter(row_number() >= last(which(y2 > y))) |> transmute(x, y = y) |> arrange(desc(x)),
-  dat |> 
-    filter( row_number() >= last(which(y3 > y2)) ) |> 
-    filter( row_number() <= last(which(y2 > y)) ) |> 
+  dat |>
+    filter( row_number() >= last(which(y3 > y2)) ) |>
+    filter( row_number() <= last(which(y2 > y)) ) |>
     transmute(x, y=y2) |> arrange(desc(x))
 )
 
 ```
 
+```{r}
+# Helper: thin a data frame to n evenly-spaced rows (spline control points)
+thin <- function(df, n = 25) df[round(seq(1, nrow(df), length.out = n)), ]
+
+# Shared viewport: maps data coords to the grid drawing area
+vp_logo <- dataViewport(
+  xData = c(-3, 3),
+  yData = c(-0.42, 0.42),
+  extension = 0.1,
+  clip = "off"
+)
+```
+
+
+
 # Full fill no border
 
 ```{r}
+#| eval: false
 #| fig-height: 4
 #| fig-width: 6
 glogo_poly <- ggplot() +
-  
+
   geom_polygon(
-    data = dat_poly, 
+    data = dat_poly,
     mapping = aes(x=x, y=y),
     fill = col1,
     colour = NA
   ) +
-  
+
   geom_polygon(
-    data = dat_poly2, 
+    data = dat_poly2,
     mapping = aes(x=x, y=y),
     fill = col2,
     colour = NA
   ) +
-  
+
   geom_polygon(
-    data = dat_poly, 
+    data = dat_poly,
     mapping = aes(x=-x, y=-y),
     fill = col1,
     colour = NA
   ) +
-  
+
   geom_polygon(
-    data = dat_poly2, 
+    data = dat_poly2,
     mapping = aes(x=-x, y=-y),
     fill = col2,
     colour = NA
   )
-  
+
 glogo_poly
 ```
 
 ```{r}
+#| eval: false
 ggsave("gglogo_poly.pdf", width = 3, height = 2)
 ggsave("gglogo_poly.svg", width = 3, height = 2)
 ggsave("gglogo_poly.emf", width = 3, height = 2)
+```
+
+```{r}
+# GridSVG: full fill, no border
+p1  <- thin(dat_poly,  25)
+p2  <- thin(dat_poly2, 30)
+p1r <- transform(thin(dat_poly,  25), x = -x, y = -y)
+p2r <- transform(thin(dat_poly2, 30), x = -x, y = -y)
+
+pdf(NULL, width = 3, height = 2)
+grid.newpage()
+pushViewport(vp_logo)
+grid.xspline(unit(p1$x,  "native"), unit(p1$y,  "native"), shape = 1, open = FALSE, gp = gpar(fill = col1, col = NA))
+grid.xspline(unit(p2$x,  "native"), unit(p2$y,  "native"), shape = 1, open = FALSE, gp = gpar(fill = col2, col = NA))
+grid.xspline(unit(p1r$x, "native"), unit(p1r$y, "native"), shape = 1, open = FALSE, gp = gpar(fill = col1, col = NA))
+grid.xspline(unit(p2r$x, "native"), unit(p2r$y, "native"), shape = 1, open = FALSE, gp = gpar(fill = col2, col = NA))
+popViewport()
+grid.export("gglogo_poly_spline.svg")
+dev.off()
 ```
 
 ```{r}
@@ -101,102 +140,120 @@ ggsave("gglogo_poly.emf", width = 3, height = 2)
 # White border
 
 ```{r}
+#| eval: false
 #| fig-height: 2
 #| fig-width: 3
 
 lw = 1.1
 col = "white"
 
-
 glogo_poly_b <- ggplot() +
-  
+
   geom_polygon(
-    data = dat_poly, 
+    data = dat_poly,
     mapping = aes(x=x, y=y),
     fill = col1,
     colour = col,
     linewidth=lw
   ) +
-  
+
   geom_polygon(
-    data = dat_poly2, 
+    data = dat_poly2,
     mapping = aes(x=x, y=y),
     fill = col2,
     colour = col,
     linewidth=lw
   ) +
-  
+
   geom_polygon(
-    data = dat_poly, 
+    data = dat_poly,
     mapping = aes(x=-x, y=-y),
     fill = col1,
     colour = col,
     linewidth=lw
   ) +
-  
+
   geom_polygon(
-    data = dat_poly2, 
+    data = dat_poly2,
     mapping = aes(x=-x, y=-y),
     fill = col2,
     colour = col,
     linewidth=lw
   )
-  
+
 glogo_poly_b
 ```
 
 ```{r}
+#| eval: false
 ggsave("gglogo_poly_w.pdf", width = 3, height = 2)
 ggsave("gglogo_poly_w.svg", width = 3, height = 2)
 ggsave("gglogo_poly_w.emf", width = 3, height = 2)
 ```
 
+```{r}
+# GridSVG: white border
+lw_spline = 1.5
+
+pdf(NULL, width = 3, height = 2)
+grid.newpage()
+pushViewport(vp_logo)
+grid.xspline(unit(p1$x,  "native"), unit(p1$y,  "native"), shape = 1, open = FALSE, gp = gpar(fill = col1, col = "white", lwd = lw_spline))
+grid.xspline(unit(p2$x,  "native"), unit(p2$y,  "native"), shape = 1, open = FALSE, gp = gpar(fill = col2, col = "white", lwd = lw_spline))
+grid.xspline(unit(p1r$x, "native"), unit(p1r$y, "native"), shape = 1, open = FALSE, gp = gpar(fill = col1, col = "white", lwd = lw_spline))
+grid.xspline(unit(p2r$x, "native"), unit(p2r$y, "native"), shape = 1, open = FALSE, gp = gpar(fill = col2, col = "white", lwd = lw_spline))
+popViewport()
+grid.export("gglogo_poly_w_spline.svg")
+dev.off()
+```
+
 # Wire frame black
 
 ```{r}
+#| eval: false
 #| fig-height: 2
 #| fig-width: 3
 
 lw = 1.1
 col = "black"
 
-glogo_wire_black <- ggplot(dat) + 
-  
+glogo_wire_black <- ggplot(dat) +
+
   geom_line(
    mapping = aes(x=x, y=y),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     mapping = aes(x=x, y=-y),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     data = dat |> filter(row_number() <= which.max(y2 > y)),
     mapping = aes(x=x, y=y2),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     data = dat |> filter(row_number() >= which.max(y3 < y2)),
     mapping = aes(x=x, y=y3),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
-    data = dat |> filter(row_number() >= last(which(-y3 < -y))), 
+    data = dat |> filter(row_number() >= last(which(-y3 < -y))),
     mapping = aes(x=x, y=-y3),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
-    data = dat |> filter(row_number() <= last(which(-y2 > -y3))), 
+    data = dat |> filter(row_number() <= last(which(-y2 > -y3))),
     mapping = aes(x=x, y=-y2),
     colour = col,
     linewidth=lw
@@ -206,58 +263,94 @@ glogo_wire_black
 ```
 
 ```{r}
+#| eval: false
 ggsave("gglogo_wire_black.pdf", width = 3, height = 2)
 ggsave("gglogo_wire_black.svg", width = 3, height = 2)
 ggsave("gglogo_wire_black.emf", width = 3, height = 2)
+```
+
+```{r}
+# GridSVG: compute wire segments once (reused for black + white)
+seg_full  <- thin(dat, 40)
+seg_y2    <- thin(dat |> filter(row_number() <= which.max(y2 > y)), 25)
+seg_y3    <- thin(dat |> filter(row_number() >= which.max(y3 < y2)), 25)
+seg_ny3   <- thin(dat |> filter(row_number() >= last(which(-y3 < -y))), 25)
+seg_ny2   <- thin(dat |> filter(row_number() <= last(which(-y2 > -y3))), 25)
+
+wire_segs <- list(
+  list(x = seg_full$x,  y =  seg_full$y),
+  list(x = seg_full$x,  y = -seg_full$y),
+  list(x = seg_y2$x,    y =  seg_y2$y2),
+  list(x = seg_y3$x,    y =  seg_y3$y3),
+  list(x = seg_ny3$x,   y = -seg_ny3$y3),
+  list(x = seg_ny2$x,   y = -seg_ny2$y2)
+)
+
+draw_wire_spline <- function(col_wire, filename) {
+  pdf(NULL, width = 3, height = 2)
+  grid.newpage()
+  pushViewport(vp_logo)
+  for (s in wire_segs) {
+    grid.xspline(unit(s$x, "native"), unit(s$y, "native"),
+                 shape = 1, open = TRUE,
+                 gp = gpar(col = col_wire, lwd = 1.5, fill = NA))
+  }
+  popViewport()
+  grid.export(filename)
+  dev.off()
+}
+
+draw_wire_spline("black", "gglogo_wire_black_spline.svg")
 ```
 
 
 # Wire frame white
 
 ```{r}
+#| eval: false
 #| fig-height: 2
 #| fig-width: 3
 
 lw = 1.1
 col = "white"
 
-glogo_wire_white <- ggplot(dat) + 
-  
+glogo_wire_white <- ggplot(dat) +
+
   geom_line(
    mapping = aes(x=x, y=y),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     mapping = aes(x=x, y=-y),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     data = dat |> filter(row_number() <= which.max(y2 > y)),
     mapping = aes(x=x, y=y2),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
     data = dat |> filter(row_number() >= which.max(y3 < y2)),
     mapping = aes(x=x, y=y3),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
-    data = dat |> filter(row_number() >= last(which(-y3 < -y))), 
+    data = dat |> filter(row_number() >= last(which(-y3 < -y))),
     mapping = aes(x=x, y=-y3),
     colour = col,
     linewidth=lw
-  ) + 
-  
+  ) +
+
   geom_line(
-    data = dat |> filter(row_number() <= last(which(-y2 > -y3))), 
+    data = dat |> filter(row_number() <= last(which(-y2 > -y3))),
     mapping = aes(x=x, y=-y2),
     colour = col,
     linewidth=lw
@@ -267,9 +360,15 @@ glogo_wire_white
 ```
 
 ```{r}
+#| eval: false
 ggsave("gglogo_wire_white.pdf", width = 3, height = 2)
 ggsave("gglogo_wire_white.svg", width = 3, height = 2)
 ggsave("gglogo_wire_white.emf", width = 3, height = 2)
+```
+
+```{r}
+# GridSVG: wire frame white (reuses wire_segs computed above)
+draw_wire_spline("white", "gglogo_wire_white_spline.svg")
 ```
 
 # Only tops
